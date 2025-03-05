@@ -15,5 +15,7 @@ source -> "both", "lab", "field" <br/>
 transform -> Pass in your own transformer <br/>
 
 #### Example Usage
+root_directory = "/content/leafsnap-dataset/"
+image_paths_file = root_directory + "leafsnap-dataset-images.txt"
 dataset = LeafsnapDataset(image_paths_file, root_directory, use_segmented=False, transform=transform) <br/>
 dataloader = DataLoader(dataset, batch_size=32, shuffle=True) <br/>
