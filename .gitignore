@@ -1,1 +1,3 @@
 /leafsnap-dataset/*
+/.kaggle/*
+*.pyc
