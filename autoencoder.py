@@ -5,6 +5,22 @@ import numpy as np
 import torch.nn as nn
 import torch.optim as optim
 
+class AEClassifier(nn.Module):
+    def __init__(self, encoder:nn.Module, embedded_dim:int, num_classes:int):
+        super().__init__()
+        self.encoder = encoder # Use the trained encoder
+        self.classifier = nn.Sequential(
+            nn.Linear(embedded_dim, 300),
+            nn.ReLU(),
+            nn.Linear(300, num_classes),
+            nn.Softmax(1)
+        )
+
+    def forward(self, x):
+        x = self.encoder(x)  # Pass input through encoder
+        x = self.classifier(x)  # Pass through classification head
+        return x
+
 class _Autoencoder(nn.Module):
     def __init__(self, input_shape:Tuple, learning_transform:Callable): # call this
         super().__init__()
@@ -56,6 +72,22 @@ def train_AE_model(model:_Autoencoder, dataset:LeafsnapDataset, epochs:int, lear
             tampered_images = model.learning_transform(images)
             reconstructed_images = model(tampered_images)
             loss = criterion(reconstructed_images, images)
+            loss.backward()
+
+            optimizer.step()
+        print(f"Epoch [{e+1}/{epochs}], Last Loss: {loss.item():.4f}")
+
+def train_classifier_head(model:nn.Module, dataset:LeafsnapDataset, epochs:int, learning_rate:float):
+    optimizer = optim.AdamW(model.classifier.parameters(), lr=learning_rate)
+    criterion = nn.CrossEntropyLoss()
+
+    for e in range(epochs):
+        for images, labels in dataset: #note, labels are discarded :D
+
+            optimizer.zero_grad()
+
+            estimated_labels = model(images)
+            loss = criterion(estimated_labels, labels)
             loss.backward()
 
             optimizer.step()
