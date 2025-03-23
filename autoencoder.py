@@ -162,15 +162,18 @@ def train_AE_model(model:_Autoencoder, dataloader:DataLoader, epochs:int, learni
 
             epoch_loss += loss.item()
             progress_bar.set_postfix(loss=loss.item(), batch=f'{batch_idx+1}/{num_batches}')
-        print(epoch_loss)
+        print(f'Total epoch loss: {epoch_loss}')
 
-def train_classifier_head(model:nn.Module, dataset:LeafsnapDataset, epochs:int, learning_rate:float):
+def train_classifier_head(model:nn.Module, dataloader:DataLoader, epochs:int, learning_rate:float):
     optimizer = optim.AdamW(model.classifier.parameters(), lr=learning_rate)
     criterion = nn.CrossEntropyLoss()
 
     for e in range(epochs):
-        for images, labels in dataset: #note, labels are discarded :D
-
+        model.train()
+        epoch_loss = 0.0
+        num_batches = len(dataloader)
+        progress_bar = tqdm(dataloader, desc=f'Epoch {e+1}/{epochs}')
+        for batch_idx, (images, labels) in enumerate(progress_bar):
             optimizer.zero_grad()
 
             estimated_labels = model(images)
@@ -178,4 +181,7 @@ def train_classifier_head(model:nn.Module, dataset:LeafsnapDataset, epochs:int, 
             loss.backward()
 
             optimizer.step()
-        print(f"Epoch [{e+1}/{epochs}], Last Loss: {loss.item():.4f}")
+
+            epoch_loss += loss.item()
+            progress_bar.set_postfix(loss=loss.item(), batch=f'{batch_idx+1}/{num_batches}')
+        print(f'Total epoch loss: {epoch_loss}')
