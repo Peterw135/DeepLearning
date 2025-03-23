@@ -8,9 +8,10 @@ import torch.optim as optim
 from tqdm import tqdm
 
 class AEClassifier(nn.Module):
-    def __init__(self, encoder:nn.Module, layer_sizes:List[int]):
+    def __init__(self, encoder:nn.Module, layer_sizes:List[int], device):
         super().__init__()
-        self.encoder = encoder # Use the trained encoder
+        self.encoder = encoder.to(device) # Use the trained encoder
+        self.device = device
 
         linear_layers = []
         for i in range(len(layer_sizes) - 1):
@@ -18,15 +19,16 @@ class AEClassifier(nn.Module):
             linear_layers.append(nn.ReLU())
         linear_layers.pop(-1)
         linear_layers.append(nn.Softmax(1))
-        self.classifier = nn.Sequential(*linear_layers)
+        self.classifier = nn.Sequential(*linear_layers).to(device)
 
     def forward(self, x):
+        x.to(self.device) # make sure the Tensor is on the device
         encoded = self.encoder(x)  # Pass input through encoder
         logits = self.classifier(encoded)  # Pass through classification head
         return logits
 
 class _Autoencoder(nn.Module):
-    def __init__(self, input_shape:Tuple, learning_transform:Callable): # call this
+    def __init__(self, input_shape:Tuple, learning_transform:Callable, device): # call this
         super().__init__()
 
         assert isinstance(input_shape, tuple), 'Input shape must be a tuple.'
@@ -34,41 +36,17 @@ class _Autoencoder(nn.Module):
 
         self.input_shape = input_shape
         self.learning_transform = learning_transform
+        self.device = device
+
+        self.to(device)
 
     def embed(self, x): # override this
         raise NotImplementedError
 
-class NaiveAutoencoder(_Autoencoder):
-    def __init__(self, input_shape:Tuple, embedded_dim:int, learning_transform:Callable=lambda x: x):
-        # init
-        super().__init__(input_shape, learning_transform)
-        self.vector_dim = self.input_shape[1] * self.input_shape[2] * self.input_shape[3]
-        self.embedded_dim = embedded_dim
-
-        # architecture
-        self.encoder = nn.Sequential(
-            nn.Flatten(), # squash (C, H, W)
-            nn.Linear(self.vector_dim, self.embedded_dim),
-            nn.ReLU(),
-        )
-        self.decoder = nn.Sequential(
-            nn.Linear(self.embedded_dim, self.vector_dim),
-            nn.Sigmoid(),
-            nn.Unflatten(dim=1, unflattened_size=self.input_shape[1:]), # unsquash (C, H, W)
-        )
-
-    def embed(self, x):
-        return self.encoder(x)
-
-    def forward(self, x):
-        out = self.encoder(x)
-        out = self.decoder(out)
-        return out
-
 class ConvolutionalAutoencoder(_Autoencoder):
-    def __init__(self, input_shape:Tuple, learning_transform:Callable=lambda x: x):
+    def __init__(self, input_shape:Tuple, learning_transform:Callable, device):
         # init
-        super().__init__(input_shape, learning_transform)
+        super().__init__(input_shape, learning_transform, device)
         assert self.input_shape[1:]==(3, 400, 400), 'Image must be 3ch by 400px by 400px'
 
         # (3, 400, 400)
@@ -130,10 +108,14 @@ class ConvolutionalAutoencoder(_Autoencoder):
         self.encoder = nn.Sequential(self.conv1, self.down1, self.conv2, self.down2, self.conv3, self.down3, self.conv4, self.down4, self.enter_dense, self.flattener)
         self.decoder = nn.Sequential(self.recovery, self.exit_dense, self.up4, self.unconv4, self.up3, self.unconv3, self.up2, self.unconv2, self.up1, self.unconv1)
 
+        self.to(device)
+
     def embed(self, x):
+        x.to(self.device) # make sure the Tensor is on the device
         return self.encoder(x)
 
     def forward(self, x):
+        x.to(self.device) # make sure the Tensor is on the device
         encoded = self.encoder(x)
         reconstructed = self.decoder(encoded)
         return reconstructed
@@ -141,7 +123,8 @@ class ConvolutionalAutoencoder(_Autoencoder):
 
 
 
-def train_AE_model(model:_Autoencoder, dataloader:DataLoader, epochs:int, learning_rate:float):
+def train_AE_model(model:_Autoencoder, dataloader:DataLoader, epochs:int, learning_rate:float, device):
+    model.to(device)
     optimizer = optim.AdamW(model.parameters(), lr=learning_rate)
     criterion = nn.MSELoss() #MSE loss is the only appropriate loss for AE
 
@@ -151,20 +134,21 @@ def train_AE_model(model:_Autoencoder, dataloader:DataLoader, epochs:int, learni
         num_batches = len(dataloader)
         progress_bar = tqdm(dataloader, desc=f'Epoch {e+1}/{epochs}')
         for batch_idx, (images, _) in enumerate(progress_bar): #note, labels are discarded, bc AE :D
-            optimizer.zero_grad()
+            images = images.to(device)
 
-            tampered_images = model.learning_transform(images)
+            optimizer.zero_grad()
+            tampered_images = model.learning_transform(images).to(device)
             reconstructed_images = model(tampered_images)
             loss = criterion(reconstructed_images, images)
             loss.backward()
-
             optimizer.step()
 
             epoch_loss += loss.item()
             progress_bar.set_postfix(loss=loss.item(), batch=f'{batch_idx+1}/{num_batches}')
         print(f'Total epoch loss: {epoch_loss}')
 
-def train_classifier_head(model:nn.Module, dataloader:DataLoader, epochs:int, learning_rate:float):
+def train_classifier_head(model:nn.Module, dataloader:DataLoader, epochs:int, learning_rate:float, device):
+    model.to(device)
     optimizer = optim.AdamW(model.classifier.parameters(), lr=learning_rate)
     criterion = nn.CrossEntropyLoss()
 
@@ -174,12 +158,12 @@ def train_classifier_head(model:nn.Module, dataloader:DataLoader, epochs:int, le
         num_batches = len(dataloader)
         progress_bar = tqdm(dataloader, desc=f'Epoch {e+1}/{epochs}')
         for batch_idx, (images, labels) in enumerate(progress_bar):
-            optimizer.zero_grad()
+            images, labels = images.to(device), labels.to(device)
 
+            optimizer.zero_grad()
             estimated_labels = model(images)
             loss = criterion(estimated_labels, labels)
             loss.backward()
-
             optimizer.step()
 
             epoch_loss += loss.item()
