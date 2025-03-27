@@ -1,0 +1,8 @@
+# don't store the dataset
+/leafsnap-dataset/*
+# ignore the python cache
+*.pyc
+# don't store model weights (way too big)
+*.pth
+# DON'T STORE YOUR KAGGLE KEY
+kaggle.json
