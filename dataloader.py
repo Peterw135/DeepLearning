@@ -1,61 +1,88 @@
 import os
+from typing import Callable
+
+import pandas as pd
 import numpy as np
+import torch
 from PIL import Image
 from torch.utils.data import Dataset
+from torchvision.transforms.functional import pil_to_tensor
 
 
 class LeafsnapDataset(Dataset):
-    def __init__(self, image_path, root_folder, use_segmented=False, source="both", transform=None):
-        self.root_directory = root_folder
+    """
+    An implementation of a torch.utils.data.Dataset designed to parse the file structure of the LeafSnap dataset.
+    https://www.kaggle.com/datasets/xhlulu/leafsnap-dataset
+    """
+    def __init__(self, leafsnap_TSV_filepath:str, leafsnap_DB_root_dir:str, use_segmented:bool=False, source:str="both", transform:Callable=lambda x:x):
+        """
+        Initializer that builds the tools for scraping images.
+
+        Arguments:
+            leafsnap_TSV_filepath (str): the (absolute or CWD relative) file path pointing to the .txt file describing the data to be used
+                    this must be in the same format as leafsnap-dataset-images.txt, since we hardcode the parsing of this file to the structure they use
+            leafsnap_DB_root_dir (str): the (absolute or CWD relative) folder path pointing to the leafsnap database where images are stored
+                    this must be in the same format as the LeafSnap dataset, since the directory scraping is hardcoded to the structure they use
+            use_segmented (bool): if True, __getitem__ will fetch the segmented version of the leaf image and append it as a 4th channel to the image
+            source (str in {'both', 'lab', 'field}): determines which set of images are pulled from the database, since the lab and field images have different formatting
+            transform (Callable): any callable transform that ingests a tensor (e.g., a torchvision.v2.Compose), __getitem__ will apply it to the image before returning
+        """
+        self.root_dir = leafsnap_DB_root_dir
+        self.use_segmented = use_segmented
         self.transform = transform
 
-        self.data = []
-        with open(image_path, 'r') as f:
-            col_names = f.readline().strip().split('\t')
+        # Load the image source text file.
+        self.image_source = pd.read_csv(leafsnap_TSV_filepath, sep='\t')
+        # Make sure the source has the right columns.
+        required_columns = set(['image_path', 'species'])
+        if source != 'both': required_columns.add('source')
+        if use_segmented: required_columns.add('segmented_path')
+        for col in required_columns: assert col in self.image_source.columns, f'The text file describing the dataset must have a column titled: {col}'
 
-            for line in f:
-                row = line.strip().split('\t')
-                self.data.append(row)
-
-        self.data = np.array(self.data)
-
+        # Get the specified images.
         if source != "both":
-            source_col = col_names.index('source')
-            self.data = self.data[self.data[:, source_col] == source]
+            self.image_source = self.image_source[self.image_source['source'] == source] # get the columns that come from the specified source ('field' or 'lab')
+            self.image_source = self.image_source.reset_index(drop=True) # reset the dataframe indexing
 
-        if use_segmented:
-            self.img_path_col = col_names.index('image_path')
-            self.segmented_path_col = col_names.index('segmented_path')
-        else:
-            self.img_path_col = col_names.index('image_path')
-            self.segmented_path_col = None
-
-        label_hashmap = {}
-        species_col = col_names.index('species')
-
-        species_set = sorted(set(self.data[:, species_col]))
-
+        # Build the label mapping
+        species_set = sorted(set(self.image_source['species'].unique()))
+        self.label_map = {}
         for i, species in enumerate(species_set):
-            label_hashmap[species] = i
-
-        self.labels = []
-        for species in self.data[:, species_col]:
-            self.labels.append(label_hashmap[species])
+            self.label_map[species] = i
 
     def __len__(self):
-        return len(self.data)
+        """
+        The length of the dataset.
+
+        Returns:
+            length (int)
+        """
+        return self.image_source.shape[0]
 
     def __getitem__(self, i):
-        img_path = os.path.join(self.root_directory, self.data[i, self.img_path_col])
-        image = Image.open(img_path).convert("RGB")
+        """
+        Overloads the general item accessor of Dataset.
 
-        if self.segmented_path_col is not None:
-            segmented_path = os.path.join(self.root_directory, self.data[i, self.segmented_path_col])
-            segmented_image = Image.open(segmented_path).convert("L")
-            segmented_image = segmented_image.resize(image.size)
-            segmented_image = np.array(segmented_image)
-            image = np.array(image)
-            image = np.dstack((image, segmented_image))
-            image = Image.fromarray(image)
+        Returns:
+            item (torch.Tensor): the image in shape (channels, height, width)
+                    if use_segmented is True, then there is an additional 4th channel containing the LeafSnap segmentation
+                    Note: height and width WILL NOT be consistent across the dataset
+            label (int): the label of the image
+                    There are 185 classes, so this is in Z[0, 184]
+        """
+        # Find and open the image
+        img_path = os.path.join(self.root_dir, self.image_source['image_path'].iloc[i])
+        PIL_image = Image.open(img_path).convert("RGB")
+        img_tensor = pil_to_tensor(PIL_image) #(3, H, W)
 
-        return self.transform(image), self.labels[i]
+        # Apply segmentation channel if appropriate
+        if self.use_segmented:
+            seg_path = os.path.join(self.root_dir, self.image_source['segmented_path'].iloc[i])
+            PIL_seg = Image.open(seg_path).convert("L")
+            seg_tensor = pil_to_tensor(PIL_seg)
+            img_tensor = torch.cat([img_tensor, seg_tensor], dim=0)
+
+        item = self.transform(img_tensor) # pass the image through the transform
+        label = self.label_map(self.image_source['species'].iloc[i]) # get the i^th label and convert it to the mapping
+
+        return item, label
