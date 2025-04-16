@@ -83,6 +83,6 @@ class LeafsnapDataset(Dataset):
             img_tensor = torch.cat([img_tensor, seg_tensor], dim=0)
 
         item = self.transform(img_tensor) # pass the image through the transform
-        label = self.label_map(self.image_source['species'].iloc[i]) # get the i^th label and convert it to the mapping
+        label = self.label_map[self.image_source['species'].iloc[i]] # get the i^th label and convert it to the mapping
 
         return item, label

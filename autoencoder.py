@@ -79,6 +79,7 @@ class ConvolutionalAutoencoder(_Autoencoder):
         # (3, 400, 400)
         self.conv1 = nn.Sequential(
             nn.Conv2d(in_channels=3, out_channels=25, kernel_size=3, padding='same', padding_mode='replicate'),
+            nn.ReLU(),
             nn.BatchNorm2d(25)
         )
         # (25, 400, 400)
@@ -86,6 +87,7 @@ class ConvolutionalAutoencoder(_Autoencoder):
         # (25, 200, 200)
         self.conv2 = nn.Sequential(
             nn.Conv2d(in_channels=25, out_channels=50, kernel_size=3, padding='same', padding_mode='replicate'),
+            nn.ReLU(),
             nn.BatchNorm2d(50)
         )
         # (50, 200, 200)
@@ -93,6 +95,7 @@ class ConvolutionalAutoencoder(_Autoencoder):
         # (50, 100, 100)
         self.conv3 = nn.Sequential(
             nn.Conv2d(in_channels=50, out_channels=75, kernel_size=3, padding='same', padding_mode='replicate'),
+            nn.ReLU(),
             nn.BatchNorm2d(75)
         )
         # (75, 100, 100)
@@ -100,6 +103,7 @@ class ConvolutionalAutoencoder(_Autoencoder):
         # (75, 50, 50)
         self.conv4 = nn.Sequential(
             nn.Conv2d(in_channels=75, out_channels=100, kernel_size=3, padding='same', padding_mode='replicate'),
+            nn.ReLU(),
             nn.BatchNorm2d(100)
         )
         # (100, 50, 50)
@@ -107,6 +111,7 @@ class ConvolutionalAutoencoder(_Autoencoder):
         # (100, 25, 25)
         self.enter_dense = nn.Sequential(
             nn.Conv2d(in_channels=100, out_channels=8, kernel_size=3, padding='same', padding_mode='replicate'),
+            nn.ReLU(),
             nn.BatchNorm2d(8)
         )
         # (8, 25, 25)
@@ -118,45 +123,53 @@ class ConvolutionalAutoencoder(_Autoencoder):
         # (8, 25, 25)
         self.exit_dense = nn.Sequential(
             nn.Conv2d(in_channels=8, out_channels=100, kernel_size=3, padding='same', padding_mode='replicate'),
+            nn.ReLU(),
             nn.BatchNorm2d(100)
         )
         # (100, 25, 25)
         self.up4 = nn.Sequential( # Note: using convolution to make this a learnable upsampling
             nn.Upsample(scale_factor=2, mode='bilinear'),
             nn.Conv2d(in_channels=100, out_channels=100, kernel_size=3, padding='same', padding_mode='replicate'),
+            nn.ReLU(),
             nn.BatchNorm2d(100)
         )
         # (100, 50, 50)
         self.unconv4 = nn.Sequential(
             nn.Conv2d(in_channels=100, out_channels=75, kernel_size=3, padding='same', padding_mode='replicate'), # Note: not using "deconvolution"
+            nn.ReLU(),
             nn.BatchNorm2d(75)
         )
         # (75, 50, 50)
         self.up3 = nn.Sequential(
             nn.Upsample(scale_factor=2, mode='bilinear'),
             nn.Conv2d(in_channels=75, out_channels=75, kernel_size=3, padding='same', padding_mode='replicate'),
+            nn.ReLU(),
             nn.BatchNorm2d(75)
         )
         # (75, 100, 100)
         self.unconv3 = nn.Sequential(
             nn.Conv2d(in_channels=75, out_channels=50, kernel_size=3, padding='same', padding_mode='replicate'),
+            nn.ReLU(),
             nn.BatchNorm2d(50)
         )
         # (50, 100, 100)
         self.up2 = nn.Sequential(
             nn.Upsample(scale_factor=2, mode='bilinear'),
             nn.Conv2d(in_channels=50, out_channels=50, kernel_size=3, padding='same', padding_mode='replicate'),
+            nn.ReLU(),
             nn.BatchNorm2d(50)
         )
         # (50, 200, 200)
         self.unconv2 = nn.Sequential(
             nn.Conv2d(in_channels=50, out_channels=25, kernel_size=3, padding='same', padding_mode='replicate'),
+            nn.ReLU(),
             nn.BatchNorm2d(25)
         )
         # (25, 200, 200)
         self.up1 = nn.Sequential(
             nn.Upsample(scale_factor=2, mode='bilinear'),
             nn.Conv2d(in_channels=25, out_channels=25, kernel_size=3, padding='same', padding_mode='replicate'),
+            nn.ReLU(),
             nn.BatchNorm2d(25)
         )
         # (25, 400, 400)
