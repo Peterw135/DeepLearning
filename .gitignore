@@ -1,3 +1,4 @@
 /leafsnap-dataset/*
+/leafsnap_fixed_set/*
 *.pyc
 kaggle.json

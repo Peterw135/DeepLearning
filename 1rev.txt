@@ -1,3 +1,4 @@
+file_id	image_path	segmented_path	species	source
 55497	dataset/images/lab/abies_concolor/ny1157-01-1.jpg	dataset/segmented/lab/abies_concolor/ny1157-01-1.png	Abies concolor	lab
 55501	dataset/images/lab/abies_concolor/ny1157-02-1.jpg	dataset/segmented/lab/abies_concolor/ny1157-02-1.png	Abies concolor	lab
 55505	dataset/images/lab/abies_concolor/ny1157-03-1.jpg	dataset/segmented/lab/abies_concolor/ny1157-03-1.png	Abies concolor	lab

@@ -5,9 +5,10 @@ from torch.utils.data import Dataset
 
 
 class LeafsnapDataset(Dataset):
-    def __init__(self, image_path, root_folder, use_segmented=False, source="both", transform=None):
+    def __init__(self, image_path, root_folder, use_segmented=False, source="both", expand_lab=False, transform=None, lab_transform=None):
         self.root_directory = root_folder
         self.transform = transform
+        self.lab_transform = lab_transform
 
         self.data = []
         with open(image_path, 'r') as f:
@@ -17,11 +18,30 @@ class LeafsnapDataset(Dataset):
                 row = line.strip().split('\t')
                 self.data.append(row)
 
+                if ((expand_lab == True) and (row[col_names.index('source')] == "lab")):
+                    image_path = row[col_names.index('image_path')]
+                    image_path_split = image_path.split(".")
+                    segmented_path = row[col_names.index('segmented_path')]
+                    segmented_path_split = segmented_path.split(".")
+                    if image_path_split[0][-2] != "-":
+                      continue
+                    if image_path_split[0][-4] == "-":
+                      continue
+                    for i in range(2, 5):
+                      new_row = row.copy()
+                      new_row[col_names.index(
+                          'image_path'
+                      )] = image_path_split[0][:-1] + str(i) + "." + image_path_split[1]
+                      new_row[col_names.index('segmented_path')] = segmented_path_split[
+                          0][:-1] + str(i) + "." + segmented_path_split[1]
+                      self.data.append(new_row)
+
+
         self.data = np.array(self.data)
+        self.source_col = col_names.index('source')
 
         if source != "both":
-            source_col = col_names.index('source')
-            self.data = self.data[self.data[:, source_col] == source]
+            self.data = self.data[self.data[:, self.source_col] == source]
 
         if use_segmented:
             self.img_path_col = col_names.index('image_path')
@@ -57,5 +77,8 @@ class LeafsnapDataset(Dataset):
             image = np.array(image)
             image = np.dstack((image, segmented_image))
             image = Image.fromarray(image)
+        
+        if self.data[i, self.source_col] == "lab":
+          return self.lab_transform(image), self.labels[i]
 
         return self.transform(image), self.labels[i]
