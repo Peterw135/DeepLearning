@@ -194,13 +194,161 @@ class ConvolutionalAutoencoder(_Autoencoder):
         reconstructed = self.decoder(encoded)
         return reconstructed
 
+class FinalConvolutionalAutoencoder(_Autoencoder):
+    def __init__(self, input_shape:Tuple, learning_transform:Callable, device):
+        # init
+        super().__init__(input_shape, learning_transform, device)
+        assert self.input_shape[1:]==(3, 400, 400), 'Image must be 3ch by 400px by 400px'
 
+        # (3, 400, 400)
+        self.conv1 = nn.Sequential(
+            nn.Conv2d(in_channels=3, out_channels=16, kernel_size=5, padding='same', padding_mode='replicate'),
+            nn.LeakyReLU(),
+            nn.BatchNorm2d(16)
+        )
+        # (16, 400, 400)
+        self.down1 = nn.MaxPool2d(kernel_size=2, stride=2)
+        # (16, 200, 200)
+        self.conv2 = nn.Sequential(
+            nn.Conv2d(in_channels=16, out_channels=32, kernel_size=5, padding='same', padding_mode='replicate'),
+            nn.LeakyReLU(),
+            nn.BatchNorm2d(32)
+        )
+        # (32, 200, 200)
+        self.down2 = nn.MaxPool2d(kernel_size=2, stride=2)
+        # (32, 100, 100)
+        self.conv3 = nn.Sequential(
+            nn.Conv2d(in_channels=32, out_channels=64, kernel_size=5, padding='same', padding_mode='replicate'),
+            nn.LeakyReLU(),
+            nn.BatchNorm2d(64)
+        )
+        # (64, 100, 100)
+        self.down3 = nn.MaxPool2d(kernel_size=2, stride=2)
+        # (64, 50, 50)
+        self.conv4 = nn.Sequential(
+            nn.Conv2d(in_channels=64, out_channels=128, kernel_size=5, padding='same', padding_mode='replicate'),
+            nn.LeakyReLU(),
+            nn.BatchNorm2d(128)
+        )
+        # (128, 50, 50)
+        self.down4 = nn.MaxPool2d(kernel_size=2, stride=2)
+        # (128, 25, 25)
+        self.enter_dense = nn.Sequential(
+            nn.Conv2d(in_channels=128, out_channels=16, kernel_size=5, padding='same', padding_mode='replicate'),
+            nn.LeakyReLU(),
+            nn.BatchNorm2d(16)
+        )
+        # (16, 25, 25)
+        self.flattener = nn.Flatten()
+        # (10000,)
+        self.deep_bottleneck = nn.Sequential(
+            nn.Linear(10000, 1000),
+            nn.LeakyReLU(),
+            nn.Linear(1000, 500),
+            nn.LeakyReLU()
+        )
+
+        # (500,)
+
+        self.un_bottleneck = nn.Sequential(
+            nn.Linear(500, 1000),
+            nn.LeakyReLU(),
+            nn.Linear(1000, 10000),
+            nn.LeakyReLU()
+        )
+        # (10000,)
+        self.unflattener = nn.Unflatten(dim=1, unflattened_size=(16, 25, 25))
+        # (16, 25, 25)
+        self.exit_dense = nn.Sequential( # Note: there's really no reason this should work
+            nn.Conv2d(in_channels=16, out_channels=128, kernel_size=5, padding='same', padding_mode='replicate'),
+            nn.LeakyReLU(),
+            nn.BatchNorm2d(128)
+        )
+        # (128, 25, 25)
+        self.up4 = nn.Sequential( # Note: using convolution to make this a learnable upsampling
+            nn.Upsample(scale_factor=2, mode='bilinear'),
+            nn.Conv2d(in_channels=128, out_channels=128, kernel_size=5, padding='same', padding_mode='replicate'),
+            nn.LeakyReLU(),
+            nn.BatchNorm2d(128)
+        )
+        # (128, 50, 50)
+        self.unconv4 = nn.Sequential(
+            nn.Conv2d(in_channels=128, out_channels=64, kernel_size=5, padding='same', padding_mode='replicate'), # Note: not using "deconvolution"
+            nn.LeakyReLU(),
+            nn.BatchNorm2d(64)
+        )
+        # (64, 50, 50)
+        self.up3 = nn.Sequential(
+            nn.Upsample(scale_factor=2, mode='bilinear'),
+            nn.Conv2d(in_channels=64, out_channels=64, kernel_size=5, padding='same', padding_mode='replicate'),
+            nn.LeakyReLU(),
+            nn.BatchNorm2d(64)
+        )
+        # (64, 100, 100)
+        self.unconv3 = nn.Sequential(
+            nn.Conv2d(in_channels=64, out_channels=32, kernel_size=5, padding='same', padding_mode='replicate'),
+            nn.LeakyReLU(),
+            nn.BatchNorm2d(32)
+        )
+        # (32, 100, 100)
+        self.up2 = nn.Sequential(
+            nn.Upsample(scale_factor=2, mode='bilinear'),
+            nn.Conv2d(in_channels=32, out_channels=32, kernel_size=5, padding='same', padding_mode='replicate'),
+            nn.LeakyReLU(),
+            nn.BatchNorm2d(32)
+        )
+        # (32, 200, 200)
+        self.unconv2 = nn.Sequential(
+            nn.Conv2d(in_channels=32, out_channels=16, kernel_size=5, padding='same', padding_mode='replicate'),
+            nn.LeakyReLU(),
+            nn.BatchNorm2d(16)
+        )
+        # (16, 200, 200)
+        self.up1 = nn.Sequential(
+            nn.Upsample(scale_factor=2, mode='bilinear'),
+            nn.Conv2d(in_channels=16, out_channels=16, kernel_size=5, padding='same', padding_mode='replicate'),
+            nn.LeakyReLU(),
+            nn.BatchNorm2d(16)
+        )
+        # (16, 400, 400)
+        self.unconv1 = nn.Sequential(
+            nn.Conv2d(in_channels=16, out_channels=3, kernel_size=5, padding='same', padding_mode='replicate'),
+            nn.Sigmoid()
+        )
+        # (3, 400, 400)
+
+        self.encoder = nn.Sequential(self.conv1, self.down1,
+                                     self.conv2, self.down2,
+                                     self.conv3, self.down3,
+                                     self.conv4, self.down4,
+                                     self.enter_dense,
+                                     self.flattener, self.deep_bottleneck
+        )
+        self.decoder = nn.Sequential(self.un_bottleneck, self.unflattener,
+                                     self.exit_dense,
+                                     self.up4, self.unconv4,
+                                     self.up3, self.unconv3,
+                                     self.up2, self.unconv2,
+                                     self.up1, self.unconv1
+        )
+
+        self.to(device)
+
+    def embed(self, x):
+        x.to(self.device) # make sure the Tensor is on the device
+        return self.encoder(x)
+
+    def forward(self, x):
+        x.to(self.device) # make sure the Tensor is on the device
+        encoded = self.encoder(x)
+        reconstructed = self.decoder(encoded)
+        return reconstructed
 
 
 def train_AE_model(model:_Autoencoder, dataloader:DataLoader, epochs:int, learning_rate:float, device):
     model.to(device)
     optimizer = optim.AdamW(model.parameters(), lr=learning_rate)
-    criterion = nn.MSELoss() #MSE loss is the only appropriate loss for AE
+    criterion = nn.MSELoss() #MSE loss is the most appropriate loss for AE
 
     for e in range(epochs):
         model.train()
