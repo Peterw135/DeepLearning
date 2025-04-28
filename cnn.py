@@ -37,19 +37,33 @@ class LambdaLayer(nn.Module):
     def forward(self, x):
         return self.lambd(x)
 
+class ConvBlock(nn.Module):
 
-class BasicBlock(nn.Module):
+    def __init__(self, in_planes, planes, device, kernel, stride=1):
+        super(ConvBlock, self).__init__()
+        self.device = device
+        
+        self.conv1 = nn.Conv2d(in_planes, planes, kernel_size=kernel, stride=stride, padding=kernel//2, bias=False)
+        self.bn1 = nn.BatchNorm2d(planes)
+
+    def forward(self, x):
+        x.to(self.device) 
+
+        out = F.leaky_relu(self.bn1(self.conv1(x)))
+        return out
+
+
+class ResBlock(nn.Module):
     expansion = 1
 
     def __init__(self, in_planes, planes, device, kernel, stride=1):
-        super(BasicBlock, self).__init__()
+        super(ResBlock, self).__init__()
         self.device = device
         
         self.conv1 = nn.Conv2d(in_planes, planes, kernel_size=kernel, stride=stride, padding=kernel//2, bias=False)
         self.bn1 = nn.BatchNorm2d(planes)
         self.conv2 = nn.Conv2d(planes, planes, kernel_size=kernel, stride=1, padding=kernel//2, bias=False)
         self.bn2 = nn.BatchNorm2d(planes)
-        self.dropout = nn.Dropout2d(p=.1)
 
         self.shortcut = nn.Sequential()
         if stride != 1 or in_planes != planes:
@@ -61,11 +75,10 @@ class BasicBlock(nn.Module):
     def forward(self, x):
         x.to(self.device) 
 
-        out = F.relu(self.bn1(self.conv1(x)))
+        out = F.leaky_relu(self.bn1(self.conv1(x)))
         out = self.bn2(self.conv2(out))
         out += self.shortcut(x)
-        out = F.relu(out)
-        out = self.dropout(out)
+        out = F.leaky_relu(out)
         return out
 
 
@@ -74,23 +87,32 @@ class ResNet_s(nn.Module):
     def __init__(self, block, num_blocks, num_layers, num_classes, device):
         super(ResNet_s, self).__init__()
         self.device = device
-        self.in_planes = 32
         self.out_planes = 512
 
-        self.conv1 = nn.Conv2d(num_layers, self.in_planes, kernel_size=7, stride=1, padding=3, bias=False)
-        self.bn1 = nn.BatchNorm2d(self.in_planes)
-        self.layer1 = self._make_layer(block, self.in_planes, num_blocks[0], device=device, kernel=5, stride=1)
-        self.layer2 = self._make_layer(block, 64, num_blocks[1], device=device, kernel=5, stride=2)
-        self.layer3 = self._make_layer(block, 128, num_blocks[2], device=device, kernel=3, stride=2)
-        self.layer4 = self._make_layer(block, 256, num_blocks[3], device=device, kernel=3, stride=2)
-        self.layer5 = self._make_layer(block, self.out_planes, num_blocks[3], device=device, kernel=3, stride=2)
+        self.in_planes = 64
+        self.conv1 = ConvBlock(num_layers, 32, device, kernel=7, stride=1)
+        self.conv1_2 = ConvBlock(32, self.in_planes, device, kernel=3, stride=2)
+        self.layer1 = self._make_layer(block, self.in_planes, num_blocks[0], device=device, kernel=3, stride=1)
 
-        self.dropout = nn.Dropout2d(p=.1)
+        self.in_planes = 128
+        self.conv2 = ConvBlock(64, self.in_planes, device, kernel=3, stride=2)
+        self.layer2 = self._make_layer(block, self.in_planes, num_blocks[1], device=device, kernel=3, stride=1)
+
+        self.in_planes = 256
+        self.conv3 = ConvBlock(128, self.in_planes, device, kernel=3, stride=2)
+        self.layer3 = self._make_layer(block, self.in_planes, num_blocks[2], device=device, kernel=3, stride=1)
+
+        self.in_planes = 512
+        self.conv4 = ConvBlock(256, self.out_planes, device, kernel=3, stride=2)
+        self.layer4 = self._make_layer(block, self.out_planes, num_blocks[3], device=device, kernel=3, stride=1)
+        #self.layer6 = self._make_layer(block, self.out_planes, num_blocks[3], device=device, kernel=3, stride=2)
+
+        #self.dropout = nn.Dropout(p=.5)
 
         # self.linear = nn.Sequential(
-        #   nn.Linear(self.out_planes, self.out_planes),
-        #   nn.ReLU(),
-        #   nn.Linear(self.out_planes, num_classes))
+        #   nn.Linear(self.out_planes, 2048),
+        #   nn.LeakyReLU(),
+        #   nn.Linear(2048, num_classes))
 
         self.linear = nn.Linear(self.out_planes, num_classes)
 
@@ -110,13 +132,15 @@ class ResNet_s(nn.Module):
     def forward(self, x):
         x.to(self.device) 
 
-        out = F.relu(self.bn1(self.conv1(x)))
-        out = self.dropout(out)
+        out = self.conv1(x)
+        out = self.conv1_2(out)
         out = self.layer1(out)
+        out = self.conv2(out)
         out = self.layer2(out)
+        out = self.conv3(out)
         out = self.layer3(out)
+        out = self.conv4(out)
         out = self.layer4(out)
-        out = self.layer5(out)
         out = F.avg_pool2d(out, out.size()[3])
         out = out.view(out.size(0), -1)
         out = self.linear(out)
@@ -124,7 +148,7 @@ class ResNet_s(nn.Module):
 
 
 def resnet(num_layers, num_classes, device):
-    return ResNet_s(BasicBlock, [2, 3, 4, 2, 1], num_layers, num_classes=num_classes, device=device)
+    return ResNet_s(ResBlock, [1, 2, 8, 4], num_layers, num_classes=num_classes, device=device)
 
 def train_resnet_model(model:ResNet_s, dataloader:DataLoader, test_dataloader:DataLoader, epochs:int, learning_rate:float, device):
   best_accuracy = float('-inf')
@@ -168,11 +192,11 @@ def train_resnet_model(model:ResNet_s, dataloader:DataLoader, test_dataloader:Da
           test_running_loss += test_loss.item()
 
           # Top-1 Accuracy
-          _, predicted = torch.max(outputs, 1)
+          _, predicted = torch.max(y_pred, 1)
           correct_top1 += (predicted == labels).sum().item()
 
           # Top-5 Accuracy
-          top5_preds = torch.topk(outputs, 5, dim=1).indices
+          top5_preds = torch.topk(y_pred, 5, dim=1).indices
           correct_top5 += torch.sum(top5_preds.eq(labels.view(-1, 1))).item()
 
           total += labels.size(0)
