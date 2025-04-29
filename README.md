@@ -2,21 +2,7 @@
 Richard Koulen, Jade Spooner, Priya Nayak, Peter Wang
 
 #### Abstract
-Identifying dense taxonomies is an increasing area of study,
-as deep learning methods improve differentiation between
-very similar images. We explore this problem through tree
-leaf classification with the LeafSnap dataset. We attempted
-3 different deep learning methodologies used in the past
-for image identification: Convolutional Neural Networks,
-Autoencoders, and Vision Transformers. 
-
-Our CNN model,DarkLeafNet, resulted in the highest top-1 (80.34%) and
-top-5 (95.61%) accuracy of all of our models. DarkLeafNet
-had better top-1 accuracy than the LeafSnap model in the
-original paper, and a similar top-5 accuracy. Our Vision
-Transformer, which used the Shifted-Window Transformer
-Tiny architecture, also performed well, 
-with a top-1 accuracy of 92.48% and top-5 of 99.66%.
+Image classification is a classic problem and architectures are soon going to have to content with dense classification taxonomies. We explore this problem through tree leaf classification with the LeafSnap dataset. We attempted 3 different deep learning methodologies used in the past for image identification: Convolutional Neural Networks, Autoencoders, and Vision Transformers. Our CNN model, DarkLeafNet, resulted in a top-1 accuracy of 80.34\% and a top-5 accuracy of 95.61\%. The SWin ViT-Tiny architecture, which we fine-tuned on LeafSnap data, achieved a top-1 accuracy of 92.48\% and a top-5 of 99.66\%. Both of these methods outperformed the original LeafSnap approach, and we found that a dense taxonomy is not specifically problematic for these approaches, requiring at best, slightly more expressivity.
 
 #### Please checkout to the respective branches to see the models in more detail! 
 
