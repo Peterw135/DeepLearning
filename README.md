@@ -1,3 +1,8 @@
+### CNN Branch
+This branch contains the work and code performed for the CNN part of the project. The final code and the Jupyter notebook used to run it are "cnn.py" and "cnn.ipynb". 
+
+Other attempted modes can be found in the "attempted-models" folder.
+
 #### Terminal Commands to Download Kaggle Dataset through API
 1) Get kaggle.json from Kaggle.com -> Your profile -> Settings -> Create New Token <br/>
 2) Upload kaggle.json you get through kaggle account settings <br/>
