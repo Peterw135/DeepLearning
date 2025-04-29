@@ -1,21 +1,9 @@
-#### Terminal Commands to Download Kaggle Dataset through API
-1) Get kaggle.json from Kaggle.com -> Your profile -> Settings -> Create New Token <br/>
-2) Upload kaggle.json you get through kaggle account settings <br/>
-mkdir -p ~/.kaggle <br/>
-mv kaggle.json ~/.kaggle/ <br/> 
-chmod 600 ~/.kaggle/kaggle.json <br/>
-kaggle datasets download -d xhlulu/leafsnap-dataset <br/>
-unzip leafsnap-dataset.zip <br/>
+## Autoencoders
 
-#### Dataloader Params
-root_folder -> Path to kaggle dataset <br/>
-image_path -> Path to leafsnap-dataset-images.txt <br/>
-use_segmented -> True/False <br/>
-source -> "both", "lab", "field" <br/> 
-transform -> Pass in your own transformer <br/>
+This branch features the autoencoder architectures that we attempted.
 
-#### Example Usage
-root_directory = "/content/leafsnap-dataset/" <br/>
-image_paths_file = root_directory + "leafsnap-dataset-images.txt" <br/>
-dataset = LeafsnapDataset(image_paths_file, root_directory, use_segmented=False, transform=transform) <br/>
-dataloader = DataLoader(dataset, batch_size=32, shuffle=True) <br/>
+`autoencoders.py` contains several autoencoder architectures (their nn.Module definitions), and `autoencoder_demonstration.ipynb` contains a demonstration of two of these models. It is a Jupyter notebook that is compatible with Colab. If you wish to run it locally, python3.12 with any pytorch install is likely to be compatible.
+
+`test.txt` and `train.txt` contain the LeafSnap splits, but other files are required for these architectures. `misctrain*.txt` map the other LeafSnap images. You will also need to download the Flavia dataset from https://flavia.sourceforge.net/.
+
+`best_checkpoints/` contains some checkpoints for the most performant model.
