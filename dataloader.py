@@ -123,6 +123,7 @@ class FlaviaDataset(Dataset):
 
         img_path = os.path.join(self.img_path, str(self.data[i]) + ".jpg")
         image = Image.open(img_path).convert("RGB")
+        img_tensor = pil_to_tensor(image) #(3, H, W)
 
         return self.transform(image), self.label[i]
 

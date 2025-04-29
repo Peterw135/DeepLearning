@@ -346,14 +346,13 @@ class FinalConvolutionalAutoencoder(_Autoencoder):
         return reconstructed
 
 class VariationalAutoencoder(_Autoencoder):
-    def __init__(self, input_shape:Tuple, learning_transform:Callable, device, latent_dim:int=256, beta:float=1.5):
+    def __init__(self, input_shape:Tuple, learning_transform:Callable, device, latent_dim:int=1000):
         # init
         super().__init__(input_shape, learning_transform, device)
-        self.beta = beta
         assert self.input_shape[1:]==(3, 400, 400), 'Image must be 3ch by 400px by 400px'
 
         # (3, 400, 400)
-        self.conv1 = nn.Sequential( # some changeups as recommended in DQGAN (2015) + 2x dim size
+        self.conv1 = nn.Sequential( # some changeups as recommended in DQGAN (2015)
             nn.Conv2d(in_channels=3, out_channels=32, kernel_size=4, stride=2, padding=1),
             nn.LeakyReLU(),
             nn.BatchNorm2d(32)
@@ -366,50 +365,80 @@ class VariationalAutoencoder(_Autoencoder):
         )
         # (64, 100, 100)
         self.conv3 = nn.Sequential(
-            nn.Conv2d(in_channels=64, out_channels=128, kernel_size=4, stride=2, padding=1),
+            nn.Conv2d(in_channels=64, out_channels=96, kernel_size=4, stride=2, padding=1),
+            nn.LeakyReLU(),
+            nn.BatchNorm2d(96)
+        )
+        # (96, 50, 50)
+        self.conv4 = nn.Sequential(
+            nn.Conv2d(in_channels=96, out_channels=128, kernel_size=4, stride=2, padding=1),
             nn.LeakyReLU(),
             nn.BatchNorm2d(128)
         )
-        # (128, 50, 50)
-        self.conv4 = nn.Sequential(
-            nn.Conv2d(in_channels=128, out_channels=256, kernel_size=4, stride=2, padding=1),
-            nn.LeakyReLU(),
-            nn.BatchNorm2d(256)
-        )
-        # (256, 25, 25)
+        # (128, 25, 25)
         self.flattener = nn.Flatten()
-        # (160000,)
-        self.mu = nn.Linear(160000, latent_dim)
-        self.logvar = nn.Linear(160000, latent_dim)
+        # (80000,)
+        self.mu = nn.Sequential(
+            nn.Linear(80000, latent_dim*2),
+            nn.Tanh(),
+            nn.Linear(latent_dim*2, latent_dim)
+        )
+        self.logvar = nn.Sequential(
+            nn.Linear(80000, latent_dim*2),
+            nn.Tanh(),
+            nn.Linear(latent_dim*2, latent_dim)
+        )
         # (latent_dim,) * 2
 
         # mu + eps.logvar backprop hack
 
         # (latent_dim,)
-        self.decode_z = nn.Linear(latent_dim, 160000)
-        # (160000,)
-        self.unflattener = nn.Unflatten(dim=1, unflattened_size=(256, 25, 25))
-        # (256, 25, 25)
-        self.unconv4 = nn.Sequential(
-            nn.ConvTranspose2d(in_channels=256, out_channels=128, kernel_size=4, stride=2, padding=1),
+        self.decode_z = nn.Sequential(
+            nn.Linear(latent_dim, latent_dim*2),
             nn.LeakyReLU(),
-            nn.BatchNorm2d(128)
+            nn.Linear(latent_dim*2, 80000)
         )
-        # (128, 50, 50)
-        self.unconv3 = nn.Sequential(
-            nn.ConvTranspose2d(in_channels=128, out_channels=64, kernel_size=4, stride=2, padding=1),
+        # (80000,)
+        self.unflattener = nn.Unflatten(dim=1, unflattened_size=(128, 25, 25))
+        # (128, 25, 25)
+        self.unconv4 = nn.Sequential(
+            nn.ConvTranspose2d(in_channels=128, out_channels=96, kernel_size=4, stride=2, padding=1),
             nn.LeakyReLU(),
-            nn.BatchNorm2d(64)
+            nn.BatchNorm2d(96),
+            nn.Conv2d(in_channels=96, out_channels=96, kernel_size=5, padding=2, padding_mode='replicate'),
+            nn.LeakyReLU(),
+            nn.BatchNorm2d(96),
+        )
+        # (96, 50, 50)
+        self.unconv3 = nn.Sequential(
+            nn.ConvTranspose2d(in_channels=96, out_channels=64, kernel_size=4, stride=2, padding=1),
+            nn.LeakyReLU(),
+            nn.BatchNorm2d(64),
+            nn.Conv2d(in_channels=64, out_channels=64, kernel_size=5, padding=2, padding_mode='replicate'),
+            nn.LeakyReLU(),
+            nn.BatchNorm2d(64),
         )
         # (64, 100, 100)
         self.unconv2 = nn.Sequential(
             nn.ConvTranspose2d(in_channels=64, out_channels=32, kernel_size=4, stride=2, padding=1),
             nn.LeakyReLU(),
-            nn.BatchNorm2d(32)
+            nn.BatchNorm2d(32),
+            nn.Conv2d(in_channels=32, out_channels=32, kernel_size=5, padding=2, padding_mode='replicate'),
+            nn.LeakyReLU(),
+            nn.BatchNorm2d(32),
         )
         # (32, 200, 200)
         self.unconv1 = nn.Sequential(
-            nn.ConvTranspose2d(in_channels=32, out_channels=3, kernel_size=4, stride=2, padding=1),
+            nn.ConvTranspose2d(in_channels=32, out_channels=16, kernel_size=4, stride=2, padding=1),
+            nn.LeakyReLU(),
+            nn.BatchNorm2d(16),
+            nn.Conv2d(in_channels=16, out_channels=16, kernel_size=5, padding=2, padding_mode='replicate'),
+            nn.LeakyReLU(),
+            nn.BatchNorm2d(16),
+        )
+        # (16, 400, 400)
+        self.refine = nn.Sequential(
+            nn.Conv2d(in_channels=16, out_channels=3, kernel_size=1),
             nn.Sigmoid()
         )
         # (3, 400, 400)
@@ -426,7 +455,8 @@ class VariationalAutoencoder(_Autoencoder):
                                      self.unconv4,
                                      self.unconv3,
                                      self.unconv2,
-                                     self.unconv1
+                                     self.unconv1,
+                                     self.refine
         )
         self.to(device)
 
@@ -436,6 +466,7 @@ class VariationalAutoencoder(_Autoencoder):
         # Encode
         enc = self.encoder(x)
         mu, logvar = self.mu(enc), self.logvar(enc)
+        logvar = torch.clamp(logvar, min=-10, max=10)
 
         # Reparametrize to z with sampling trick
         std = torch.exp(0.5 * logvar)
@@ -459,7 +490,7 @@ class VariationalAutoencoder(_Autoencoder):
 
 
 
-def vae_loss(reconstructed, original, mu, logvar, beta=1.5):
+def vae_loss(reconstructed, original, mu, logvar, beta=1.0):
     reconstruction_loss = nn.functional.mse_loss(reconstructed, original, reduction='mean')
     kl_divergence_loss = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
     # Total VAE loss
@@ -489,7 +520,7 @@ def train_AE_model(model:_Autoencoder, dataloader:DataLoader, epochs:int, learni
             progress_bar.set_postfix(loss=loss.item(), batch=f'{batch_idx+1}/{num_batches}')
         print(f'Epoch {e+1} average loss: {epoch_loss/num_batches:.4f}')
 
-def train_VAE_model(model:_Autoencoder, dataloader:DataLoader, epochs:int, learning_rate:float, device):
+def train_VAE_model(model:_Autoencoder, dataloader:DataLoader, epochs:int, learning_rate:float, device, beta:float=1.0):
     model.to(device)
     optimizer = optim.AdamW(model.parameters(), lr=learning_rate)
     criterion = vae_loss
@@ -503,9 +534,9 @@ def train_VAE_model(model:_Autoencoder, dataloader:DataLoader, epochs:int, learn
             images = images.to(device)
 
             optimizer.zero_grad()
-            tampered_images = model.learning_transform(images).to(device)
-            reconstructed_images, mu, logvar = model(tampered_images)
-            loss = criterion(reconstructed_images, tampered_images, mu, logvar, model.beta) #unlike the denoising AE, I'll use the learning transform to supply rotations and reflections, so we want it to reconstruct the tampered version, not remove the tampering
+            perturbed_images = model.learning_transform(images).to(device) # e.g., rotations, reflections
+            reconstructed_images, mu, logvar = model(perturbed_images)
+            loss = criterion(reconstructed_images, perturbed_images, mu, logvar, beta) #unlike the denoising AE, I'll use the learning transform to supply rotations and reflections, so we want it to reconstruct the tampered version, not remove the tampering
             loss.backward()
             optimizer.step()
 
@@ -534,4 +565,4 @@ def train_classifier_head(model:nn.Module, dataloader:DataLoader, epochs:int, le
 
             epoch_loss += loss.item()
             progress_bar.set_postfix(loss=loss.item(), batch=f'{batch_idx+1}/{num_batches}')
-        print(f'Total epoch loss: {epoch_loss}')
+        print(f'Epoch {e+1} average loss: {epoch_loss/num_batches:.4f}')
