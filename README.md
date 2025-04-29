@@ -1,3 +1,7 @@
+#### ViT and Swin Implementation 
+This branch contains the work and code performed for the Vision Transformer part of the project. Navigate to `ViT.ipynb` for the initial vision transformer implementation and `Swin_ViT.ipynb` for the final Swin implementation. They are both Jupyter notebooks and compatible/recommended to be with Colab. If you wish to run it locally, Python 3.12 with any PyTorch install is likely to be compatible.
+
+
 #### Terminal Commands to Download Kaggle Dataset through API
 1) Get kaggle.json from Kaggle.com -> Your profile -> Settings -> Create New Token <br/>
 2) Upload kaggle.json you get through kaggle account settings <br/>
